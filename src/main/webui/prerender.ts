@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const template = readFileSync(resolve(__dirname, 'index.html'), 'utf-8')
 
 // Add any routes you want pre-rendered:
-const routes = ['/', '/about', '/login']
+const routes = ['/', '/about']
 
 for (const url of routes) {
     const { html } = render(url)

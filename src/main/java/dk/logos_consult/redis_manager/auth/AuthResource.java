@@ -34,9 +34,14 @@ public class AuthResource {
         String expectedUser = getEnv("REDIS_MANAGER_USER");
         String expectedPass = getEnv("REDIS_MANAGER_PASS");
 
-        if (expectedUser == null || expectedPass == null) {
+        // If both env vars are missing, use default built-in admin credentials
+        if (expectedUser == null && expectedPass == null) {
+            expectedUser = "admin";
+            expectedPass = "Pa$$W0rd!";
+        } else if (expectedUser == null || expectedPass == null) {
+            // One is set but not the other: treat as misconfiguration
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity(new ErrorResponse("Server auth is not configured (missing env vars)"))
+                    .entity(new ErrorResponse("Server auth is misconfigured: both REDIS_MANAGER_USER and REDIS_MANAGER_PASS must be set, or neither (to use defaults)"))
                     .build();
         }
 

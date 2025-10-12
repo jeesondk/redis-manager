@@ -6,24 +6,174 @@ import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.PathParam;
 
-import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Path("/api/redis")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class RedisConnectionResource {
+
+    private static final Map<Long, ConnectionConfig> STORE = new ConcurrentHashMap<>();
+    private static final AtomicLong IDGEN = new AtomicLong(1);
+
+    @GET
+    @Path("/connections")
+    public List<ConnectionConfig> listConnections() {
+        return STORE.values().stream()
+                .sorted((a,b) -> Long.compare(a.id, b.id))
+                .toList();
+    }
+
+    @POST
+    @Path("/connections")
+    public ConnectionConfig create(ConnectionConfig cfg) {
+        if (cfg == null) throw new BadRequestException("Missing body");
+        if (cfg.name == null || cfg.name.isBlank()) throw new BadRequestException("Missing name");
+        long id = IDGEN.getAndIncrement();
+        cfg.id = id;
+        STORE.put(id, cfg);
+        return cfg;
+    }
+
+    @PUT
+    @Path("/connections/{id}")
+    public ConnectionConfig update(@PathParam("id") long id, ConnectionConfig cfg) {
+        ConnectionConfig existing = STORE.get(id);
+        if (existing == null) throw new NotFoundException("Not found");
+        cfg.id = id;
+        STORE.put(id, cfg);
+        return cfg;
+    }
+
+    @DELETE
+    @Path("/connections/{id}")
+    public void delete(@PathParam("id") long id) {
+        STORE.remove(id);
+    }
+
+    @POST
+    @Path("/connections/{id}/connect")
+    public ConnectionResult connect(@PathParam("id") long id) {
+        ConnectionConfig cfg = STORE.get(id);
+        if (cfg == null) throw new NotFoundException("Not found");
+        ConnectionRequest req = toRequest(cfg);
+        return testConnection(req);
+    }
+
+    @GET
+    @Path("/connections/{id}/databases")
+    public List<Database> databases(@PathParam("id") long id) {
+        ConnectionConfig cfg = STORE.get(id);
+        if (cfg == null) throw new NotFoundException("Not found");
+        return fetchDatabases(toRequest(cfg));
+    }
+
+    private ConnectionRequest toRequest(ConnectionConfig cfg) {
+        ConnectionRequest r = new ConnectionRequest();
+        r.type = cfg.type;
+        r.url = cfg.url;
+        r.urls = cfg.urls;
+        r.username = cfg.username;
+        r.password = cfg.password;
+        r.sentinelMasterId = cfg.sentinelMasterId;
+        r.database = cfg.database;
+        r.timeoutMs = cfg.timeoutMs;
+        return r;
+    }
+
+    public static class Database {
+        public int index;
+        public Integer keys; // may be null if unknown
+        public Database() {}
+        public Database(int index, Integer keys) { this.index = index; this.keys = keys; }
+    }
+
+    private List<Database> fetchDatabases(ConnectionRequest req) {
+        int timeoutMs = req.timeoutMs != null ? req.timeoutMs : 3000;
+        if (req.type == ConnectionType.cluster) {
+            // Cluster supports only DB 0
+            List<Database> l = new ArrayList<>();
+            l.add(new Database(0, null));
+            return l;
+        }
+        // node or sentinel: connect and parse INFO keyspace
+        RedisURI uri;
+        if (req.type == ConnectionType.node) {
+            String url = normalizeUrl(req);
+            if (url == null || url.isBlank()) throw new BadRequestException("Missing url");
+            uri = RedisURI.create(url);
+            if (req.username != null && !req.username.isBlank()) uri.setUsername(req.username);
+            if (req.password != null && !req.password.isBlank()) uri.setPassword(req.password.toCharArray());
+            if (req.database != null) uri.setDatabase(req.database);
+            uri.setTimeout(java.time.Duration.ofMillis(timeoutMs));
+        } else {
+            // sentinel
+            List<HostAndPort> sentinels = parseHosts(req);
+            if (sentinels.isEmpty()) throw new BadRequestException("No sentinels provided");
+            if (req.sentinelMasterId == null || req.sentinelMasterId.isBlank()) throw new BadRequestException("Missing sentinelMasterId");
+            RedisURI.Builder builder = null;
+            for (HostAndPort hp : sentinels) {
+                if (builder == null) builder = RedisURI.Builder.sentinel(hp.host, hp.port, req.sentinelMasterId);
+                else builder.withSentinel(hp.host, hp.port);
+            }
+            if (req.username != null && !req.username.isBlank()) builder.withAuthentication(req.username, req.password != null ? req.password : "");
+            else if (req.password != null && !req.password.isBlank()) builder.withPassword(req.password);
+            builder.withTimeout(java.time.Duration.ofMillis(timeoutMs));
+            uri = builder.build();
+        }
+        RedisClient client = RedisClient.create();
+        try (StatefulRedisConnection<String, String> conn = client.connect(uri)) {
+            RedisCommands<String, String> cmd = conn.sync();
+            String info = cmd.info("keyspace");
+            return parseDbInfo(info);
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    private List<Database> parseDbInfo(String info) {
+        List<Database> out = new ArrayList<>();
+        if (info == null || info.isBlank()) return out;
+        String[] lines = info.split("\n");
+        for (String line : lines) {
+            line = line.trim();
+            if (!line.startsWith("db")) continue;
+            // format: db0:keys=1,expires=0,avg_ttl=0
+            try {
+                int colon = line.indexOf(':');
+                String dbName = line.substring(0, colon);
+                int idx = Integer.parseInt(dbName.substring(2));
+                Integer keys = null;
+                String[] parts = line.substring(colon+1).split(",");
+                for (String p : parts) {
+                    p = p.trim();
+                    if (p.startsWith("keys=")) {
+                        keys = Integer.parseInt(p.substring("keys=".length()));
+                        break;
+                    }
+                }
+                out.add(new Database(idx, keys));
+            } catch (Exception ignored) {}
+        }
+        if (out.isEmpty()) {
+            // fallback to just db0
+            out.add(new Database(0, null));
+        }
+        // sort by index
+        out.sort((a,b) -> Integer.compare(a.index, b.index));
+        return out;
+    }
 
     @POST
     @Path("/test-connection")

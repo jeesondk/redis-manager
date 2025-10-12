@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 
 export default function Login() {
@@ -23,8 +23,8 @@ export default function Login() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data?.error || 'Login failed')
       }
-      // Cookie is set by server (HttpOnly). Redirect to home.
-      navigate('/')
+      // Cookie is set by server (HttpOnly). Redirect to home with a search param to trigger auth re-check.
+      navigate('/?loggedin=1')
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {
@@ -37,7 +37,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="bg-white shadow rounded-lg border border-gray-200">
           <div className="px-6 py-8">
-            <h1 className="text-2xl font-semibold text-gray-900 mb-2">Welcome back</h1>
+            <h1 className="text-2xl font-semibold text-gray-900 mb-2">Redis Manager</h1>
             <p className="text-sm text-gray-600 mb-6">Enter your username and password to sign in</p>
             {error && (
               <div className="mb-4 text-red-700 bg-red-50 border border-red-200 rounded p-2 text-sm">
@@ -71,14 +71,10 @@ export default function Login() {
                   required
                 />
               </div>
-              <Button disabled={loading} className="w-full">
+              <Button type="submit" disabled={loading} className="w-full text-black">
                 {loading ? 'Signing in…' : 'Sign in'}
               </Button>
             </form>
-          </div>
-          <div className="px-6 py-4 border-t border-gray-200 text-sm text-gray-600">
-            <span className="mr-1">Don’t have credentials?</span>
-            <Link className="text-blue-600 hover:underline" to="/">Return home</Link>
           </div>
         </div>
       </div>
