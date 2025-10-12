@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import LoginRoutes from '@/routes/LoginRoutes'
 import RedisLanding from './pages/RedisLanding'
