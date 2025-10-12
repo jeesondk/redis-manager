@@ -1,61 +1,103 @@
 # redis-mgr
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+A full-stack app built with:
+- Quarkus (Java backend)
+- Quarkus Quinoa (integrates the JS frontend build and dev server)
+- Vite + React + Tailwind v4 (frontend in `src/main/webui`)
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+This README explains how the pieces fit together and how to run the app in development and production.
 
-## Running the application in dev mode
+Useful links when running in dev mode:
+- App (SPA): http://localhost:8080/
+- Quarkus Dev UI: http://localhost:8080/q/dev-ui
+- Base REST API: http://localhost:8080/api
+- Example endpoint: http://localhost:8080/api/hello
 
-You can run your application in dev mode that enables live coding using:
+---
 
-```shell script
+## How it works (Quarkus + Quinoa + Vite)
+
+- The Java backend is a standard Quarkus application. A sample resource is exposed at `/api/hello` that returns JSON.
+- The frontend lives under `src/main/webui` and is built by Vite. Tailwind v4 is enabled with a single import in `src/main/webui/src/index.css`.
+- Quarkus Quinoa bridges the two:
+  - In dev mode, Quinoa will install Node/npm (if not present), start the Vite dev server, and proxy requests from Quarkus (8080) to Vite (5173). You only run `./mvnw quarkus:dev`.
+  - In production builds, Quinoa runs `npm run build` and serves the generated static assets from within the Quarkus app. The app is then self-contained at port 8080.
+
+Relevant configuration (already set in `src/main/resources/application.properties`):
+- `quarkus.quinoa.ui-dir=src/main/webui` — where the frontend lives
+- `quarkus.quinoa.build-dir=dist/client` — where Vite emits the production build
+- `quarkus.quinoa.dev-server.port=5173` — Vite dev server port (proxied by Quarkus during dev)
+- `quarkus.quinoa.package-manager-install=true` (+ versions) — Quinoa will download its own Node/npm
+
+---
+
+## Run in development (hot reload for both Java and JS)
+
+1) Start Quarkus in dev mode (this also starts Vite via Quinoa):
+
+```
 ./mvnw quarkus:dev
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+2) Open these URLs:
+- App (frontend served via Vite through Quarkus): http://localhost:8080/
+- Quarkus Dev UI: http://localhost:8080/q/dev-ui
+- Example REST endpoint: http://localhost:8080/api/hello
 
-## Packaging and running the application
+Changes to Java classes reload automatically, and frontend changes hot-reload through Vite.
 
-The application can be packaged using:
+Optional: run the frontend standalone (without Quarkus) for pure UI work:
 
-```shell script
+```
+cd src/main/webui
+npm install
+npm run dev
+```
+
+This serves the UI at http://localhost:5173/ (Quarkus is not involved in this mode).
+
+---
+
+## Build for production
+
+1) Package the app (Quinoa will build the UI and Quarkus will embed the static assets):
+
+```
 ./mvnw package
 ```
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
+2) Run the JAR:
 
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
-
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
-./mvnw package -Dquarkus.package.jar.type=uber-jar
+```
+java -jar target/quarkus-app/quarkus-run.jar
 ```
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
+Then open http://localhost:8080/.
 
-## Creating a native executable
+Uber-jar and native builds also work as usual:
 
-You can create a native executable using:
-
-```shell script
+```
+./mvnw package -Dquarkus.package.jar.type=uber-jar
 ./mvnw package -Dnative
 ```
 
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
+---
 
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
-```
+## Project layout
 
-You can then execute your native executable with: `./target/redis-mgr-1.0.0-runner`
+- Backend (Quarkus): `src/main/java/...`
+  - Example resource: `GET /api/hello`
+- Frontend (Vite + React + Tailwind): `src/main/webui`
+  - Dev scripts in `src/main/webui/package.json`
+  - Production output: `src/main/webui/dist/client`
+- Configuration: `src/main/resources/application.properties`
 
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
+---
 
-## Related Guides
+## References
 
-- SmallRye OpenAPI ([guide](https://quarkus.io/guides/openapi-swaggerui)): Document your REST APIs with OpenAPI - comes with Swagger UI
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
-- Swagger UI ([guide](https://quarkus.io/guides/openapi-swaggerui)): Swagger UI
-- Quinoa ([guide](https://quarkiverse.github.io/quarkiverse-docs/quarkus-quinoa/dev/index.html)): Develop, build, and serve your npm-compatible web applications such as React, Angular, Vue, Lit, Svelte, Astro, SolidJS, and others alongside Quarkus.
+- Quarkus: https://quarkus.io/
+- Quarkus Quinoa: https://quarkiverse.github.io/quarkiverse-docs/quarkus-quinoa/dev/
+- Vite: https://vitejs.dev/
+- React: https://react.dev/
+- Tailwind CSS v4: https://tailwindcss.com/blog/tailwindcss-v4
