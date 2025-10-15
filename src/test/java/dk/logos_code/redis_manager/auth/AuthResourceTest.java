@@ -1,4 +1,4 @@
-package dk.logos_consult.redis_manager.auth;
+package dk.logos_code.redis_manager.auth;
 
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;

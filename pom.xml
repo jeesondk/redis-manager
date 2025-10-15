@@ -3,6 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dk.logos-consult</groupId>
     <artifactId>redis-mgr</artifactId>
+
     <version>1.0.0</version>
 
     <properties>
@@ -17,6 +18,7 @@
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
         <!-- Ensure Quarkus dev mode starts with required JVM arguments (Java 24 module open + disable Netty Unsafe) -->
         <quarkus.dev.jvm-args>--add-opens java.base/java.lang=ALL-UNNAMED -Dio.netty.noUnsafe=true</quarkus.dev.jvm-args>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
     </properties>
 
     <dependencyManagement>
@@ -53,11 +55,21 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-arc</artifactId>
         </dependency>
+        <!-- Add Quarkus OIDC for OpenID Connect authentication -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-oidc</artifactId>
+        </dependency>
         <!-- Lettuce Redis client for standalone, Sentinel, and Cluster -->
         <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
             <version>6.4.2.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${mapstruct.version}</version>
         </dependency>
         <!-- Test dependencies -->
         <dependency>
@@ -77,6 +89,10 @@
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
         </dependency>
     </dependencies>
 
@@ -103,6 +119,19 @@
                 <version>${compiler-plugin.version}</version>
                 <configuration>
                     <parameters>true</parameters>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Optional: helpful for debugging generated code -->
+                    <compilerArgs>
+                        <arg>-Amapstruct.defaultComponentModel=cdi</arg>
+                        <arg>-Amapstruct.suppressGeneratorTimestamp=true</arg>
+                        <arg>-Amapstruct.verbose=true</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>

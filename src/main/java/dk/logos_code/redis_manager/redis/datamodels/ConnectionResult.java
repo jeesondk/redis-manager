@@ -1,4 +1,4 @@
-package dk.logos_consult.redis_manager.redis;
+package dk.logos_code.redis_manager.redis.datamodels;
 
 public class ConnectionResult {
     public boolean success;

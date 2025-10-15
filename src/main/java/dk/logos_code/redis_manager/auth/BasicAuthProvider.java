@@ -1,33 +1,35 @@
-package dk.logos_consult.redis_manager.auth;
+package dk.logos_code.redis_manager.auth;
 
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.*;
+import jakarta.ws.rs.core.NewCookie;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Path("/api/auth")
-@Produces(MediaType.APPLICATION_JSON)
-@Consumes(MediaType.APPLICATION_JSON)
-public class AuthResource {
+/**
+ * Basic username/password auth with server-side session cookie.
+ * Extracted from AuthResource to follow pluggable provider pattern.
+ */
+public class BasicAuthProvider implements AuthProvider {
 
-    private static final String COOKIE_NAME = "rm_session";
-    private static final int SESSION_TTL_SECONDS = 30 * 60; // 30 minutes
+    private final String cookieName;
+    private final int sessionTtlSeconds;
 
     private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
 
-    public record LoginRequest(String username, String password) {}
-    public record MeResponse(String username) {}
-    public record ErrorResponse(String error) {}
+    public BasicAuthProvider(String cookieName, int sessionTtlSeconds) {
+        this.cookieName = cookieName;
+        this.sessionTtlSeconds = sessionTtlSeconds;
+    }
 
-    @POST
-    @Path("/login")
-    public Response login(LoginRequest body, @Context UriInfo uriInfo) {
+    @Override
+    public Response login(AuthResource.LoginRequest body, UriInfo uriInfo) {
         if (body == null || isBlank(body.username()) || isBlank(body.password())) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ErrorResponse("username and password are required"))
+                    .entity(new AuthResource.ErrorResponse("username and password are required"))
                     .build();
         }
 
@@ -38,44 +40,43 @@ public class AuthResource {
         if (expectedUser == null && expectedPass == null) {
             expectedUser = "admin";
             expectedPass = "Pa$$W0rd!";
+            System.out.println("Using built-in admin credentials for server auth");
         } else if (expectedUser == null || expectedPass == null) {
             // One is set but not the other: treat as misconfiguration
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity(new ErrorResponse("Server auth is misconfigured: both REDIS_MANAGER_USER and REDIS_MANAGER_PASS must be set, or neither (to use defaults)"))
+                    .entity(new AuthResource.ErrorResponse("Server auth is misconfigured: both REDIS_MANAGER_USER and REDIS_MANAGER_PASS must be set, or neither (to use defaults)"))
                     .build();
         }
 
         if (!expectedUser.equals(body.username()) || !expectedPass.equals(body.password())) {
             return Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new ErrorResponse("Invalid username or password"))
+                    .entity(new AuthResource.ErrorResponse("Invalid username or password"))
                     .build();
         }
 
         String token = UUID.randomUUID().toString();
-        Instant expiresAt = Instant.now().plusSeconds(SESSION_TTL_SECONDS);
+        Instant expiresAt = Instant.now().plusSeconds(sessionTtlSeconds);
         SESSIONS.put(token, new Session(body.username(), expiresAt));
 
-        NewCookie cookie = buildSessionCookie(token, SESSION_TTL_SECONDS);
-        return Response.ok(new MeResponse(body.username()))
+        NewCookie cookie = buildSessionCookie(token, sessionTtlSeconds);
+        return Response.ok(new AuthResource.MeResponse(body.username()))
                 .cookie(cookie)
                 .build();
     }
 
-    @GET
-    @Path("/me")
-    public Response me(@CookieParam(COOKIE_NAME) String token) {
+    @Override
+    public Response me(String token) {
         Session session = validate(token);
         if (session == null) {
             return Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new ErrorResponse("Not authenticated"))
+                    .entity(new AuthResource.ErrorResponse("Not authenticated"))
                     .build();
         }
-        return Response.ok(new MeResponse(session.username)).build();
+        return Response.ok(new AuthResource.MeResponse(session.username)).build();
     }
 
-    @POST
-    @Path("/logout")
-    public Response logout(@CookieParam(COOKIE_NAME) String token) {
+    @Override
+    public Response logout(String token) {
         if (token != null) {
             SESSIONS.remove(token);
         }
@@ -84,10 +85,10 @@ public class AuthResource {
         return Response.noContent().cookie(expired).build();
     }
 
-    private static NewCookie buildSessionCookie(String value, int maxAgeSeconds) {
+    private NewCookie buildSessionCookie(String value, int maxAgeSeconds) {
         // Note: set secure=false to work in dev over http; consider enabling Secure in production behind TLS
         return new NewCookie(
-                COOKIE_NAME,
+                this.cookieName,
                 value,
                 "/",
                 null,
