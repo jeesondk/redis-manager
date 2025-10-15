@@ -5,7 +5,6 @@ import dk.logos_code.redis_manager.redis.datamodels.RedisHostAndPort;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
 import io.quarkus.logging.Log;
@@ -23,7 +22,7 @@ import java.util.List;
  * databases) and keeps connection details in one place.
  */
 @ApplicationScoped
-public final class RedisConnector {
+public final class RedisConnector implements AutoCloseable {
 
     public RedisConnector() {}
     private RedisClient clientInstance = null;
@@ -59,22 +58,13 @@ public final class RedisConnector {
         }
     }
 
-    public RedisClient GetClient(){
+    public RedisConnector GetClient(){
         if(clientInstance == null){
             CreateClient();
         }
-        return clientInstance;
+        return this;
     }
 
-    public static String fetchInfoKeyspace(RedisURI uri) {
-        RedisClient client = RedisClient.create();
-        try (StatefulRedisConnection<String, String> conn = client.connect(uri)) {
-            RedisCommands<String, String> cmd = conn.sync();
-            return cmd.info("keyspace");
-        } finally {
-            client.shutdown();
-        }
-    }
 
     /**
      * Build a RedisURI for node or sentinel request types. For cluster, caller should
@@ -91,11 +81,9 @@ public final class RedisConnector {
         };
     }
 
-    private RedisClient CreateClient() {
+    private void CreateClient() {
         ClientResources res = DefaultClientResources.create();
-        RedisClient client = RedisClient.create(res);
-        clientInstance = client;
-        return clientInstance;
+        clientInstance = RedisClient.create(res);
     }
 
     static RedisURI buildNodeUri(ConnectionConfig req, int timeoutMs) {
@@ -161,5 +149,10 @@ public final class RedisConnector {
             }
         }
         return res;
+    }
+
+    @Override
+    public void close() throws Exception {
+        this.Disconnect();
     }
 }

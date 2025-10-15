@@ -36,9 +36,15 @@ public class RedisConnectionResource {
         return redisService.getConnections();
     }
 
+    @GET
+    @Path("/{id}")
+    public ConnectionResponse getConnection (@PathParam("id") long id) {
+        return redisService.getConnection(id);
+    }
+
     @POST
     @Path("/")
-    public ConnectionResponse create(CreateConnectionRequest req) {
+    public ConnectionResponse createConnection(CreateConnectionRequest req) {
         if (req == null) throw new BadRequestException("Missing body");
         if (req.name() == null || req.name().isBlank()) throw new BadRequestException("Missing name");
 
@@ -47,13 +53,13 @@ public class RedisConnectionResource {
 
     @PATCH
     @Path("/{id}")
-    public ConnectionResponse update(@PathParam("id") long id, CreateConnectionRequest req) {
+    public ConnectionResponse updateConnection(@PathParam("id") long id, CreateConnectionRequest req) {
         return redisService.updateConnection(id, req);
     }
 
     @DELETE
     @Path("/{id}")
-    public void delete(@PathParam("id") long id) {
+    public void deleteConnection(@PathParam("id") long id) {
 
         redisService.deleteConnection(id);
     }

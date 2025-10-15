@@ -1,9 +1,11 @@
 package dk.logos_code.redis_manager.redis;
 
+import dk.logos_code.redis_manager.redis.datamodels.RedisConnectionType;
+
 import java.util.List;
 
 public class ConnectionRequest {
-    public ConnectionType type; // node | sentinel | cluster
+    public RedisConnectionType type; // node | sentinel | cluster
 
     // For node: single URL like redis://host:6379 or rediss://...
     public String url;

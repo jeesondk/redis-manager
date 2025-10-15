@@ -1,13 +1,10 @@
 package dk.logos_code.redis_manager.redis;
 
+import dk.logos_code.redis_manager.redis.commands.RedisGetValue;
 import dk.logos_code.redis_manager.redis.commands.RedisListKeys;
-import dk.logos_code.redis_manager.redis.datamodels.ConnectionConfig;
-import dk.logos_code.redis_manager.redis.datamodels.ConnectionResponse;
-import dk.logos_code.redis_manager.redis.datamodels.CreateConnectionRequest;
-import dk.logos_code.redis_manager.redis.datamodels.RedisServerInfo;
+import dk.logos_code.redis_manager.redis.datamodels.*;
 import dk.logos_code.redis_manager.redis.mappers.ConnectionRequestMapper;
 import dk.logos_code.redis_manager.redis.mappers.ConnectionResponseMapper;
-import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -45,25 +42,36 @@ public class RedisService {
         if (req == null)
             throw new Exception("Not found");
 
-        try(RedisClient client = connector.GetClient()){
-            try(StatefulRedisConnection<String, String> conn = connector.Connect(req, req.timeoutMs)){
+        try(RedisConnector redisConnector = connector.GetClient()){
+            try(StatefulRedisConnection<String, String> conn = redisConnector.Connect(req, req.timeoutMs)){
                 return RedisDbCounts.getDbKeyCounts(conn);
             }
 
         }
     }
 
-    public List<String> listKeys(long connectionId, int dbIndex, String matchPattern, int scanCount) throws Exception {
+    public List<RedisKeyInfo> listKeys(long connectionId, int dbIndex, String matchPattern, int scanCount) throws Exception {
         ConnectionConfig req = repo.get(connectionId);
         if (req == null)
             throw new Exception("Not found");
 
-        try(RedisClient client = connector.GetClient()){
-            try(StatefulRedisConnection<String, String> conn = connector.Connect(req, req.timeoutMs)){
-                List<String> keys = new ArrayList<>();
-                RedisListKeys.streamKeysInDb(conn, dbIndex, matchPattern, scanCount, keys::add);
-
+        try(RedisConnector redisConnector = connector.GetClient()){
+            try(StatefulRedisConnection<String, String> conn = redisConnector.Connect(req, req.timeoutMs)){
+                List<RedisKeyInfo> keys = new ArrayList<>();
+                RedisListKeys.streamKeysWithTypeInDbPipelined(conn, dbIndex, matchPattern, scanCount, keys::add);
                 return keys;
+            }
+        }
+    }
+
+    public RedisValue getKeyValue(long connectionId, int dbIndex, String key) throws Exception {
+        ConnectionConfig req = repo.get(connectionId);
+        if (req == null)
+            throw new Exception("Not found");
+
+        try(RedisConnector redisConnector = connector.GetClient()){
+            try(StatefulRedisConnection<String, String> conn = redisConnector.Connect(req, req.timeoutMs)){
+                return RedisGetValue.get(conn, dbIndex, key);
             }
         }
     }
@@ -81,6 +89,12 @@ public class RedisService {
                 .toList();
     }
 
+    public ConnectionResponse getConnection(long id) {
+        ConnectionConfig cfg = repo.get(id);
+        if (cfg == null) return null;
+        return responseMapper.toResponse(cfg);
+    }
+
     public ConnectionResponse updateConnection(long id, CreateConnectionRequest req) {
         var connCfg = repo.get(id);
         Objects.requireNonNull(req, "req");
@@ -90,7 +104,7 @@ public class RedisService {
         }
 
         // Type from req.type() or fallback from serverInfo.mode
-        connCfg.type = mapType(req.type(), req.serverInfo());
+        connCfg.type = req.serverInfo().mode();
 
         // Credentials
         if (req.credentials() != null) {
@@ -123,7 +137,7 @@ public class RedisService {
         // Optional: validate consistency
         validateConfig(connCfg);
 
-        return responseMapper.toResponse(repo.store(connCfg));
+        return responseMapper.toResponse(repo.update(connCfg));
     }
 
     public void deleteConnection(long id) {
@@ -145,28 +159,9 @@ public class RedisService {
         return list.isEmpty() ? null : list;
     }
 
-    private ConnectionType mapType(String rawType, RedisServerInfo si) {
-        // Prefer explicit type on request
-        if (notBlank(rawType)) return toEnum(rawType.trim());
-        // Fallback to serverInfo.mode (if supplied)
-        if (si != null && notBlank(si.mode())) return toEnum(si.mode().trim());
-        // Unknown/unchanged — you can choose to keep existing cfg.type instead,
-        // but here we return null so the caller keeps whatever is in cfg already.
-        return null;
-    }
-
-    private ConnectionType toEnum(String v) {
-        return switch (v.toLowerCase()) {
-            case "node", "single", "standalone" -> ConnectionType.node;
-            case "sentinel" -> ConnectionType.sentinel;
-            case "cluster" -> ConnectionType.cluster;
-            default -> throw new IllegalArgumentException("Unknown connection type/mode: " + v);
-        };
-    }
-
     private void validateConfig(ConnectionConfig cfg) {
         // Minimal checks; expand as needed
-        if (cfg.type == ConnectionType.sentinel && !notBlank(cfg.sentinelMasterId)) {
+        if (cfg.type == RedisConnectionType.sentinel && !notBlank(cfg.sentinelMasterId)) {
             throw new IllegalArgumentException("sentinelMasterId is required for sentinel connections");
         }
         if ((cfg.urls == null || cfg.urls.isEmpty())) {
@@ -182,4 +177,6 @@ public class RedisService {
 
     private static boolean notBlank(String s) { return s != null && !s.trim().isEmpty(); }
     private static String blankToNull(String s) { return notBlank(s) ? s.trim() : null; }
+
+
 }

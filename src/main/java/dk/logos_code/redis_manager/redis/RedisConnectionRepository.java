@@ -33,4 +33,8 @@ public class RedisConnectionRepository {
     public void delete(long id) {
         STORE.remove(id);
     }
+
+    public ConnectionConfig update(ConnectionConfig connCfg) {
+        return STORE.replace(connCfg.id, connCfg);
+    }
 }

@@ -1,7 +1,5 @@
-// src/main/java/dk/logos_code/redis_manager/redis/datamodels/ConnectionRequestMapper.java
 package dk.logos_code.redis_manager.redis.mappers;
 
-import dk.logos_code.redis_manager.redis.ConnectionType;
 import dk.logos_code.redis_manager.redis.datamodels.ConnectionConfig;
 import dk.logos_code.redis_manager.redis.datamodels.CreateConnectionRequest;
 import dk.logos_code.redis_manager.redis.datamodels.RedisServerInfo;
@@ -21,7 +19,7 @@ public interface ConnectionRequestMapper {
             @Mapping(target = "sentinelMasterId", source = "sentinelMasterId"),
 
             // String -> enum (node|sentinel|cluster)
-            @Mapping(target = "type", expression = "java(mapType(req.type(), req.serverInfo()))"),
+            @Mapping(target = "type", source = "req.serverInfo.mode"),
 
             // credentials
             @Mapping(target = "username", source = "credentials.username"),
@@ -53,26 +51,5 @@ public interface ConnectionRequestMapper {
             }
             cfg.urls = list.isEmpty() ? null : list;
         }
-    }
-
-    /** Map the request `type` or, if missing, try to infer from serverInfo.mode. */
-    default ConnectionType mapType(String rawType, RedisServerInfo si) {
-        if (rawType != null && !rawType.isBlank()) {
-            return toEnum(rawType.trim());
-        }
-        // optional fallback from serverInfo.mode
-        if (si != null && si.mode() != null && !si.mode().isBlank()) {
-            return toEnum(si.mode().trim());
-        }
-        return null;
-    }
-
-    private ConnectionType toEnum(String v) {
-        return switch (v.toLowerCase()) {
-            case "node", "single", "standalone" -> ConnectionType.node;
-            case "sentinel" -> ConnectionType.sentinel;
-            case "cluster" -> ConnectionType.cluster;
-            default -> throw new IllegalArgumentException("Unknown connection type/mode: " + v);
-        };
     }
 }
