@@ -5,7 +5,7 @@
 
 export async function logoutApi(): Promise<void> {
   try {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
   } catch (_) {
     // ignore network errors: we still want to force client-side unauth state/redirect
   }

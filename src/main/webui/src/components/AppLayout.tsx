@@ -30,8 +30,7 @@ const defaultMenu: MenuItem[] = [
     { label: "Settings", href: "/settings" },
 ]
 
-/*
-function MobileHeader({ logo, sidebar }: Pick<AppLayoutProps, "logo" | "sidebar">) {
+/*function MobileHeader({ logo, sidebar }: Pick<AppLayoutProps, "logo" | "sidebar">) {
     return (
         <div className="md:hidden fixed top-0 left-0 right-0 z-40 h-12 border-b bg-white px-3">
             <div className="flex h-full items-center justify-between">
@@ -68,8 +67,7 @@ function MobileHeader({ logo, sidebar }: Pick<AppLayoutProps, "logo" | "sidebar"
             </div>
         </div>
     )
-}
-*/
+}*/
 
 export default function AppLayout(props: AppLayoutProps) {
     const userName = props.userName ?? "Jane Doe"

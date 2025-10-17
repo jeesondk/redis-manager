@@ -12,7 +12,7 @@ export default function App() {
     // Check auth on mount and whenever the route changes
     useEffect(() => {
         let mounted = true
-        fetch('/api/auth/me')
+        fetch('/api/auth/me', { credentials: 'include' })
             .then(res => { if (mounted) setStatus(res.ok ? 'authed' : 'unauth') })
             .catch(() => { if (mounted) setStatus('unauth') })
         return () => { mounted = false }

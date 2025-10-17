@@ -15,7 +15,7 @@ export default function Login() {
     let cancelled = false
     async function loadProvider() {
       try {
-        const res = await fetch('/api/auth/provider')
+        const res = await fetch('/api/auth/provider', { credentials: 'include' })
         if (!res.ok) throw new Error('Failed to detect auth provider')
         const data = await res.json()
         if (!cancelled) setProvider(data?.provider ?? null)
@@ -39,7 +39,8 @@ export default function Login() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
+        credentials: 'include'
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
