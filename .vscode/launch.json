@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Launch Quarkus App",
+            "request": "launch",
+            "mainClass": "io.quarkus.bootstrap.runner.QuarkusEntryPoint",
+            "projectName": "redis-mgr",
+            "cwd": "${workspaceFolder}",
+            "vmArgs": "--add-opens java.base/java.lang=ALL-UNNAMED -Dio.netty.noUnsafe=true",
+            "args": "",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "java",
+            "name": "Debug Quarkus App",
+            "request": "launch",
+            "mainClass": "io.quarkus.bootstrap.runner.QuarkusEntryPoint",
+            "projectName": "redis-mgr",
+            "cwd": "${workspaceFolder}",
+            "vmArgs": "--add-opens java.base/java.lang=ALL-UNNAMED -Dio.netty.noUnsafe=true",
+            "args": "",
+            "console": "integratedTerminal",
+            "preLaunchTask": "quarkus:build"
+        }
+    ]
+}

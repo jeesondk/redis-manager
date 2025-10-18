@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { SquarePen, Trash2, ChevronDown, ChevronRight } from "lucide-react"
 
@@ -48,7 +47,7 @@ export function DesktopSidebar() {
     const onChanged = () => { loadConnections() }
     window.addEventListener('connections:changed', onChanged as EventListener)
 
-    // Listen for toggle events from other components (e.g., RedisLanding)
+    // Listen for toggle events from other components (e.g., Content)
     const onToggle = (e: Event) => {
       try {
         const ev = e as CustomEvent<{ id: number }>
@@ -70,7 +69,7 @@ export function DesktopSidebar() {
             setDbs(null)
             setStatus({ success: true, message: 'Disconnected' })
             setExpandedId(null)
-            // Also reset RedisLanding to the default page if this was the selected connection
+            // Also reset Content to the default page if this was the selected connection
             if (selectedId === id) {
               const sp = new URLSearchParams(location.search)
               sp.delete('conn')
@@ -195,7 +194,7 @@ export function DesktopSidebar() {
         setConnectedId(null)
         setDbs(null)
         setStatus({ success: true, message: 'Disconnected' })
-        // Also reset RedisLanding to the default page if this was the selected connection
+        // Also reset Content to the default page if this was the selected connection
         if (selectedId === id) {
           const sp = new URLSearchParams(location.search)
           sp.delete('conn')
@@ -227,27 +226,8 @@ export function DesktopSidebar() {
     setExpandedId(id)
   }
 
-  function disconnectCurrent() {
-    if (connectedId == null) return
-    setConnectedId(null)
-    setDbs(null)
-    setStatus({ success: true, message: 'Disconnected' })
-    setExpandedId(null)
-    // Reset RedisLanding to the default page if the currently selected connection was disconnected
-    if (selectedId === connectedId) {
-      const sp = new URLSearchParams(location.search)
-      sp.delete('conn')
-      sp.delete('db')
-      sp.delete('key')
-      sp.delete('add')
-      sp.delete('edit')
-      navigate({ search: `?${sp.toString()}` })
-    }
-  }
-
-  return (
-    <aside className="hidden md:block w-1/4 shrink-0 border-r bg-white">
-      <ScrollArea className="h-[calc(100vh-3.5rem)]">
+    return (
+    <aside className="hidden md:block w-1/4 shrink-0 border-r bg-white min-h-0">
         <div className="space-y-2">
           <div className="flex px-2 pt-2 items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Connections</h2>
@@ -377,7 +357,6 @@ export function DesktopSidebar() {
             ))}
           </div>
         </div>
-      </ScrollArea>
     </aside>
   )
 }

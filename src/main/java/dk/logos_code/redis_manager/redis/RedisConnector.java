@@ -8,6 +8,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
 import io.quarkus.logging.Log;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Duration;
@@ -26,6 +27,7 @@ public final class RedisConnector implements AutoCloseable {
 
     public RedisConnector() {}
     private RedisClient clientInstance = null;
+    private ClientResources clientResources = null;
 
     public StatefulRedisConnection<String, String> Connect(ConnectionConfig req, int timeoutMs) {
         var uri = buildUri(req, timeoutMs);
@@ -56,6 +58,13 @@ public final class RedisConnector implements AutoCloseable {
                 clientInstance = null;
             }
         }
+        if (clientResources != null) {
+            try {
+                clientResources.shutdown();
+            } finally {
+                clientResources = null;
+            }
+        }
     }
 
     public RedisConnector GetClient(){
@@ -82,8 +91,8 @@ public final class RedisConnector implements AutoCloseable {
     }
 
     private void CreateClient() {
-        ClientResources res = DefaultClientResources.create();
-        clientInstance = RedisClient.create(res);
+        clientResources = DefaultClientResources.create();
+        clientInstance = RedisClient.create(clientResources);
     }
 
     static RedisURI buildNodeUri(ConnectionConfig req, int timeoutMs) {
@@ -154,5 +163,15 @@ public final class RedisConnector implements AutoCloseable {
     @Override
     public void close() throws Exception {
         this.Disconnect();
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        Log.info("Shutting down RedisConnector resources");
+        try {
+            close();
+        } catch (Exception e) {
+            Log.error("Error during RedisConnector cleanup", e);
+        }
     }
 }

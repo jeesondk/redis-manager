@@ -66,18 +66,28 @@ This serves the UI at http://localhost:5173/ (Quarkus is not involved in this mo
 ./mvnw package
 ```
 
-2) Run the JAR:
+2) Run the JAR with required JVM arguments:
 
+```bash
+# Option 1: Use the provided script (recommended)
+./run-app.sh
+
+# Option 2: Run directly with java -jar
+java --add-opens java.base/java.lang=ALL-UNNAMED -Dio.netty.noUnsafe=true -jar target/quarkus-app/quarkus-run.jar
 ```
-java -jar target/quarkus-app/quarkus-run.jar
-```
+
+**Important:** The JVM arguments `--add-opens java.base/java.lang=ALL-UNNAMED` and `-Dio.netty.noUnsafe=true` are required for Java 17+ to avoid runtime errors and warnings related to JBoss Threads and Netty.
 
 Then open http://localhost:8080/.
 
 Uber-jar and native builds also work as usual:
 
-```
+```bash
 ./mvnw package -Dquarkus.package.jar.type=uber-jar
+# Run uber-jar with:
+java --add-opens java.base/java.lang=ALL-UNNAMED -Dio.netty.noUnsafe=true -jar target/*-runner.jar
+
+# Native build (no JVM args needed)
 ./mvnw package -Dnative
 ```
 

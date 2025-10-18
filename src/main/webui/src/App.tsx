@@ -1,7 +1,7 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import LoginRoutes from '@/routes/LoginRoutes'
-import RedisLanding from './pages/RedisLanding'
+import Content from './pages/Content.tsx'
 import AppLayout from '@/components/AppLayout.tsx'
 
 
@@ -69,7 +69,7 @@ export default function App() {
         const base = [{ label: 'Home', href: '/' }]
         if (selectedId != null) {
             base.push({ label: selectedConn?.name || `Connection ${selectedId}`, href: `/?conn=${selectedId}` })
-            base.push({ label: `DB ${activeDb}` })
+            base.push({ label: `DB ${activeDb}`, href: `/?conn=${selectedId}&db=${activeDb}` })
         }
         return base
     }, [selectedId, selectedConn, activeDb])
@@ -85,11 +85,11 @@ export default function App() {
     // Authenticated: render the full app layout
     return (
         <AppLayout
-                userName="admin"
+                userName=""
                 breadcrumbs={crumbs}
         >
             <Routes>
-                <Route path="/" element={<RedisLanding />} />
+                <Route path="/" element={<Content />} />
             </Routes>
         </AppLayout>
     )

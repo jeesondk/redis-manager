@@ -1,5 +1,4 @@
 import * as React from "react"
-import {Home} from "lucide-react"
 import {DesktopTopbar} from "@/components/DesktopTopbar.tsx";
 import {DesktopSidebar} from "@/components/DesktopSidebar.tsx";
 
@@ -18,17 +17,9 @@ interface AppLayoutProps {
 
 // Default data for quick preview
 const defaultCrumbs: Crumb[] = [
-    { label: "Home", href: "/" },
-    { label: "Projects", href: "/projects" },
-    { label: "Alpha" },
+    { label: "Home", href: "/" }
 ]
 
-const defaultMenu: MenuItem[] = [
-    { label: "Dashboard", href: "/", icon: <Home className="h-4 w-4" /> },
-    { label: "Projects", href: "/projects" },
-    { label: "Reports", href: "/reports" },
-    { label: "Settings", href: "/settings" },
-]
 
 /*function MobileHeader({ logo, sidebar }: Pick<AppLayoutProps, "logo" | "sidebar">) {
     return (
@@ -70,9 +61,8 @@ const defaultMenu: MenuItem[] = [
 }*/
 
 export default function AppLayout(props: AppLayoutProps) {
-    const userName = props.userName ?? "Jane Doe"
+    const userName = props.userName ?? ""
     const crumbs = props.breadcrumbs ?? defaultCrumbs
-    const sidebar = props.sidebar ?? defaultMenu
     const logo = props.logo ?? (
         <a href="/" className="flex items-center gap-2">
             <div className="h-6 w-6 rounded bg-primary" />
@@ -81,7 +71,7 @@ export default function AppLayout(props: AppLayoutProps) {
     )
 
     return (
-        <div className="w-full bg-slate-50 text-slate-900">
+        <div className="h-screen w-full bg-slate-50 text-slate-900 flex flex-col overflow-hidden">
             {/* Mobile header (burger)
             <MobileHeader logo={logo} sidebar={sidebar}/>
             */}
@@ -93,36 +83,24 @@ export default function AppLayout(props: AppLayoutProps) {
                 logo={logo}
             />
 
-            <div className="mx-auto w-full max-w-[1400px] px-3 md:px-6">
+            <div className="mx-auto w-full max-w-[1400px] px-3 md:px-6 min-h-0 flex flex-col">
                 {/* Account for fixed mobile header height */}
-                <div className="pt-12 md:pt-4" />
+                <div className="pt-12 md:pt-4 shrink-0" />
 
-                <div className="flex gap-4 md:gap-6">
-                    <DesktopSidebar sidebar={sidebar} />
+                <div className="flex-col-2 md:pb-6 pb-4 h-screen" >
+
+
+                <div className="flex h-full gap-4 md:gap-6 overflow-hidden">
+                    <DesktopSidebar />
 
                     {/* Main content */}
-                    <main className="flex-1">
-                        <div className="min-h-[calc(100vh-6rem)] rounded-xl border bg-white p-4 md:p-6 shadow-sm">
-                            {props.children ?? (
-                                <div className="prose prose-slate max-w-none">
-                                    <h1>Welcome</h1>
-                                    <p>
-                                        This is a classic two-column application layout with a responsive top bar.
-                                        On mobile, the top bar collapses into a burger menu. On desktop, the left
-                                        menu is visible with <code>w-1/4</code> width, and the main view is on the right.
-                                    </p>
-                                    <ul>
-                                        <li>Tailwind for layout + utility classes</li>
-                                        <li>shadcn/ui for menu, breadcrumb, sheet, dropdown, avatar</li>
-                                        <li>Lucide icons</li>
-                                    </ul>
-                                </div>
-                            )}
+                    <main>
+                        <div className="flex h-full overflow-hidden bg-white">
+                            { props.children }
                         </div>
                     </main>
+                    </div>
                 </div>
-
-                <div className="h-6" />
             </div>
         </div>
     )

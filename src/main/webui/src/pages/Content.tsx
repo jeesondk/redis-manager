@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Copy, Check } from 'lucide-react'
@@ -19,7 +19,7 @@ type ConnectionConfig = {
   timeoutMs?: number
 }
 
-export default function RedisLanding() {
+export default function Content() {
   const [connections, setConnections] = useState<ConnectionConfig[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [editing, setEditing] = useState<ConnectionConfig | null>(null)
@@ -58,6 +58,17 @@ export default function RedisLanding() {
   // Infinite scroll: only render a window of keys
   const pageSize = 20
   const [visibleCount, setVisibleCount] = useState<number>(pageSize)
+  // Search controls
+  const [searchTerm, setSearchTerm] = useState<string>('')
+  const [searchIn, setSearchIn] = useState<'keys' | 'values'>('keys')
+  // Type filter (multi-select), applied before search
+  type RedisKeyType = RedisKeyInfo['type']
+  const TYPE_OPTIONS: RedisKeyType[] = ['STRING','LIST','SET','ZSET','HASH','NONE','UNKNOWN']
+  const [selectedTypes, setSelectedTypes] = useState<RedisKeyType[]>(TYPE_OPTIONS)
+  // Cache for values when searching in values
+  const [valueCache, setValueCache] = useState<Record<string, string>>({})
+  const [valueSearchProgress, setValueSearchProgress] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 })
+  const valueSearchRunId = useRef(0)
 
   // Determine default DB from selected connection's serverInfo (fallback 0)
   const defaultDb = useMemo(() => {
@@ -166,9 +177,16 @@ export default function RedisLanding() {
     return () => clearInterval(id)
   }, [autoRefresh, refreshIntervalSec, selectedId, activeDb, keysLoading])
 
-  // Reset infinite-scroll window when keys set, connection, or DB changes
+  // Reset infinite-scroll window when context or filters change
   useEffect(() => {
     setVisibleCount(pageSize)
+  }, [selectedId, activeDb, keys.length, searchTerm, searchIn, selectedTypes])
+
+  // Clear cached values and cancel any running value-search when context changes
+  useEffect(() => {
+    setValueCache({})
+    setValueSearchProgress({ running: false, done: 0, total: 0 })
+    valueSearchRunId.current++ // invalidate any ongoing search
   }, [selectedId, activeDb, keys.length])
 
   // Fetch the key value when modal is requested
@@ -191,6 +209,7 @@ export default function RedisLanding() {
     })()
     return () => { cancelled = true }
   }, [viewKey, selectedId])
+
 
   function formatValueForDisplay(v: RedisValue | null): string {
     if (!v) return ''
@@ -239,13 +258,98 @@ export default function RedisLanding() {
     }
   }
   
+  // Available key types found in current list (fallback to TYPE_OPTIONS if unknown)
+  const availableTypes = useMemo<RedisKeyType[]>(() => {
+    const set = new Set<RedisKeyType>()
+    for (const k of keys) set.add(k.type as RedisKeyType)
+    const arr = Array.from(set)
+    return arr.length > 0 ? arr : TYPE_OPTIONS
+  }, [keys])
+
+  // Apply type filter first
+  const typeFilteredKeys = useMemo(() => {
+    if (!selectedTypes || selectedTypes.length === 0) return [] as typeof keys
+    const allowed = new Set<RedisKeyType>(selectedTypes)
+    return keys.filter(k => allowed.has(k.type as RedisKeyType))
+  }, [keys, selectedTypes])
+
+  // Then apply search on the type-filtered set (before slicing for infinite scroll)
+  const filteredKeys = useMemo(() => {
+    const term = (searchTerm || '').toLowerCase().trim()
+    if (!term) return typeFilteredKeys
+    if (searchIn === 'keys') {
+      return typeFilteredKeys.filter(k => k.key.toLowerCase().includes(term))
+    } else {
+      return typeFilteredKeys.filter(k => {
+        const v = valueCache[k.key]
+        return typeof v === 'string' && v.toLowerCase().includes(term)
+      })
+    }
+  }, [typeFilteredKeys, searchTerm, searchIn, valueCache])
+
+  // When searching in values, prefetch values for all keys in the current type-filtered set
+  useEffect(() => {
+    if (searchIn !== 'values') return
+    const term = (searchTerm || '').trim()
+    if (!term || selectedId == null || typeFilteredKeys.length === 0) return
+
+    const runId = ++valueSearchRunId.current
+    let cancelled = false
+
+    const total = typeFilteredKeys.length
+    setValueSearchProgress({ running: true, done: 0, total })
+
+    const concurrency = 5
+    let nextIndex = 0
+    let done = 0
+
+    async function fetchValueFor(keyStr: string) {
+      try {
+        const res = await fetch(`/api/redis/instances/${selectedId}/${activeDb}/${encodeURIComponent(keyStr)}`, { credentials: 'include' })
+        if (!res.ok) return
+        const data = await res.json()
+        const display = formatValueForDisplay(data as any)
+        if (cancelled || valueSearchRunId.current !== runId) return
+        setValueCache(prev => (prev[keyStr] !== undefined ? prev : { ...prev, [keyStr]: display }))
+      } catch (_) {
+        // ignore errors for individual keys
+      }
+    }
+
+    async function worker() {
+      while (!cancelled && valueSearchRunId.current === runId) {
+        const i = nextIndex++
+        if (i >= typeFilteredKeys.length) break
+        const k = typeFilteredKeys[i].key
+        if (valueCache[k] === undefined) {
+          await fetchValueFor(k)
+        }
+        done++
+        if (!cancelled && valueSearchRunId.current === runId) {
+          setValueSearchProgress(prev => ({ ...prev, done }))
+        }
+      }
+    }
+
+    const workers = Array.from({ length: concurrency }, () => worker())
+    Promise.all(workers).finally(() => {
+      if (!cancelled && valueSearchRunId.current === runId) {
+        setValueSearchProgress(prev => ({ ...prev, running: false }))
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [searchIn, searchTerm, selectedId, activeDb, typeFilteredKeys])
+  
   // Infinite scroll handler
   function handleKeysScroll(e: any) {
     const el = e.currentTarget as HTMLDivElement
     if (!el) return
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24
     if (nearBottom) {
-      setVisibleCount(v => Math.min(v + pageSize, keys.length))
+      setVisibleCount(v => Math.min(v + pageSize, filteredKeys.length))
     }
   }
 
@@ -340,29 +444,93 @@ export default function RedisLanding() {
   const selected = useMemo(() => connections.find(c => c.id === selectedId) || null, [connections, selectedId])
 
   return (
-    <div className="min-h-screen flex">
-      
-      <main className="flex-1 p-6">
+    <div className="flex">
+      <div className="flex">
         {!selected && (
           <div className="text-gray-500">Select a connection to get started.</div>
         )}
         {selected && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="flex-row gap-4 p-4">
+            <div className="flex-row items-center justify-between">
                 <h1 className="text-2xl font-semibold">{selected.name}</h1>
                 <div className="text-sm text-gray-500">{selected.type}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Removed Toggle connection button per spec */}
-              </div>
             </div>
             <div className="space-y-3">
               <div className="text-xs text-slate-500">Default database keys are shown below. Databases are shown in the sidebar for reference.</div>
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm text-slate-700">Keys in DB {activeDb}</div>
-                  <div className="flex items-center gap-3">
+                <div className="flex-row items-center justify-between mb-2">
+                  <div className="text-sm text-slate-700 py-2">Keys in DB {activeDb}</div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search"
+                        className="w-48 border rounded px-2 py-1"
+                        aria-label="Search"
+                        title="Search"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <span>in</span>
+                      <select
+                        value={searchIn}
+                        onChange={(e) => setSearchIn(e.target.value as 'keys' | 'values')}
+                        className="border rounded px-2 py-1"
+                        aria-label="Search in"
+                        title="Search in"
+                      >
+                        <option value="keys">Keys</option>
+                        <option value="values">Values</option>
+                      </select>
+                    </label>
+
+                    {/* Type filter (applied before search) */}
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <span>Types</span>
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1" title="Select all types">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={selectedTypes.length >= availableTypes.length}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedTypes(availableTypes.slice())
+                              else setSelectedTypes([])
+                            }}
+                            aria-label="Select all types"
+                          />
+                          <span>All</span>
+                        </label>
+                        {availableTypes.map(t => (
+                          <label key={t} className="inline-flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={selectedTypes.includes(t)}
+                              onChange={(e) => {
+                                setSelectedTypes(prev => {
+                                  if (e.target.checked) {
+                                    if (prev.includes(t)) return prev
+                                    return [...prev, t]
+                                  } else {
+                                    return prev.filter(x => x !== t)
+                                  }
+                                })
+                              }}
+                              aria-label={`Toggle type ${t}`}
+                            />
+                            <span>{t}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {searchIn === 'values' && searchTerm.trim() && valueSearchProgress.running && (
+                      <span className="text-xs text-slate-500">Searching values… {valueSearchProgress.done}/{valueSearchProgress.total}</span>
+                    )}
+
                     <label className="flex items-center gap-2 text-sm text-slate-700">
                       <input
                         type="checkbox"
@@ -404,8 +572,8 @@ export default function RedisLanding() {
                 {!keysLoading && !keysError && Array.isArray(keys) && keys.length === 0 && (
                   <div className="text-sm text-slate-500">No keys found.</div>
                 )}
-                {!keysLoading && !keysError && Array.isArray(keys) && keys.length > 0 && (
-                  <div className="border rounded-md overflow-auto max-h-[60vh]" onScroll={handleKeysScroll}>
+                {!keysLoading && !keysError && Array.isArray(keys) && filteredKeys.length > 0 && (
+                  <div className="border rounded-md overflow-auto max-h-[75vh]" onScroll={handleKeysScroll}>
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 border-b">
                         <tr>
@@ -416,7 +584,7 @@ export default function RedisLanding() {
                         </tr>
                       </thead>
                       <tbody>
-                        {keys.slice(0, visibleCount).map((k) => (
+                        {filteredKeys.slice(0, visibleCount).map((k) => (
                           <tr key={k.key} className="border-b last:border-b-0 hover:bg-slate-50">
                             <td className="px-3 py-2 truncate max-w-[40vw]" title={k.key}>{k.key}</td>
                             <td className="px-3 py-2">{k.type}</td>
@@ -430,12 +598,18 @@ export default function RedisLanding() {
                     </table>
                   </div>
                 )}
+                {!keysLoading && !keysError && Array.isArray(keys) && searchTerm.trim() && filteredKeys.length === 0 && (
+                  <div className="text-sm text-slate-500">No matches.</div>
+                )}
+                {!keysLoading && !keysError && Array.isArray(keys) && !searchTerm.trim() && keys.length > 0 && filteredKeys.length === 0 && (
+                  <div className="text-sm text-slate-500">No keys match the selected types.</div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-      </main>
+      </div>
 
       {editing && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
@@ -542,7 +716,6 @@ export default function RedisLanding() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
