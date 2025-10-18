@@ -55,6 +55,9 @@ export default function RedisLanding() {
   const [keys, setKeys] = useState<RedisKeyInfo[]>([])
   const [keysLoading, setKeysLoading] = useState(false)
   const [keysError, setKeysError] = useState<string | null>(null)
+  // Infinite scroll: only render a window of keys
+  const pageSize = 20
+  const [visibleCount, setVisibleCount] = useState<number>(pageSize)
 
   // Determine default DB from selected connection's serverInfo (fallback 0)
   const defaultDb = useMemo(() => {
@@ -163,6 +166,11 @@ export default function RedisLanding() {
     return () => clearInterval(id)
   }, [autoRefresh, refreshIntervalSec, selectedId, activeDb, keysLoading])
 
+  // Reset infinite-scroll window when keys set, connection, or DB changes
+  useEffect(() => {
+    setVisibleCount(pageSize)
+  }, [selectedId, activeDb, keys.length])
+
   // Fetch the key value when modal is requested
   useEffect(() => {
     if (!viewKey || selectedId == null) return
@@ -228,6 +236,16 @@ export default function RedisLanding() {
       } catch {
         alert('Failed to copy')
       }
+    }
+  }
+  
+  // Infinite scroll handler
+  function handleKeysScroll(e: any) {
+    const el = e.currentTarget as HTMLDivElement
+    if (!el) return
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+    if (nearBottom) {
+      setVisibleCount(v => Math.min(v + pageSize, keys.length))
     }
   }
 
@@ -387,7 +405,7 @@ export default function RedisLanding() {
                   <div className="text-sm text-slate-500">No keys found.</div>
                 )}
                 {!keysLoading && !keysError && Array.isArray(keys) && keys.length > 0 && (
-                  <div className="border rounded-md overflow-hidden">
+                  <div className="border rounded-md overflow-auto max-h-[60vh]" onScroll={handleKeysScroll}>
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 border-b">
                         <tr>
@@ -398,7 +416,7 @@ export default function RedisLanding() {
                         </tr>
                       </thead>
                       <tbody>
-                        {keys.map((k) => (
+                        {keys.slice(0, visibleCount).map((k) => (
                           <tr key={k.key} className="border-b last:border-b-0 hover:bg-slate-50">
                             <td className="px-3 py-2 truncate max-w-[40vw]" title={k.key}>{k.key}</td>
                             <td className="px-3 py-2">{k.type}</td>

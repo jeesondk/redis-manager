@@ -339,8 +339,9 @@ export function DesktopSidebar() {
                           {dbs.map(db => {
                             const sp = new URLSearchParams(location.search)
                             const selDbStr = sp.get('db')
-                            const selDb = selDbStr ? Number(selDbStr) : null
-                            const isActive = selectedId === c.id && selDb === db.index
+                            const defaultDbIndex = (c as any)?.serverInfo && typeof (c as any).serverInfo.defaultDb === 'number' ? (c as any).serverInfo.defaultDb : 0
+                            const selectedDb = selDbStr ? Number(selDbStr) : defaultDbIndex
+                            const isActive = selectedId === c.id && selectedDb === db.index
                             return (
                               <li
                                 key={db.index}
