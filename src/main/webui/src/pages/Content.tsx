@@ -1,23 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
-import { Copy, Check } from 'lucide-react'
-
-export type ConnectionType = 'node' | 'sentinel' | 'cluster'
-
-type ConnectionConfig = {
-  id?: number
-  name: string
-  type: ConnectionType
-  url?: string
-  urls?: string[]
-  port?: number
-  username?: string
-  password?: string
-  sentinelMasterId?: string
-  database?: number
-  timeoutMs?: number
-}
+import { ConnectionEditModal, type ConnectionConfig } from '../components/modals/ConnectionEditModal'
+import { KeyValueViewerModal, type RedisValue } from '../components/modals/KeyValueViewerModal'
 
 export default function Content() {
   const [connections, setConnections] = useState<ConnectionConfig[]>([])
@@ -28,17 +13,6 @@ export default function Content() {
   // Database list and connection status moved to DesktopSidebar
 
   // Key value modal state
-  type RedisValue = {
-    key: string
-    type: 'STRING' | 'LIST' | 'SET' | 'ZSET' | 'HASH' | 'NONE' | 'UNKNOWN'
-    stringValue?: string
-    listValue?: string[]
-    setValue?: string[]
-    zsetValue?: { score: number; value: string }[]
-    hashValue?: Record<string, string>
-    ttlSeconds: number
-    pttlMillis: number
-  }
   const [viewKey, setViewKey] = useState<{ db: number; key: string } | null>(null)
   const [valueData, setValueData] = useState<RedisValue | null>(null)
   const [valueLoading, setValueLoading] = useState(false)
@@ -210,31 +184,30 @@ export default function Content() {
     return () => { cancelled = true }
   }, [viewKey, selectedId])
 
-
-  function formatValueForDisplay(v: RedisValue | null): string {
-    if (!v) return ''
-    switch (v.type) {
-      case 'STRING':
-        return v.stringValue ?? ''
-      case 'LIST':
-        return (v.listValue || []).join('\n')
-      case 'SET':
-        return Array.from(v.setValue || []).join('\n')
-      case 'HASH':
-        return JSON.stringify(v.hashValue || {}, null, 2)
-      case 'ZSET':
-        return JSON.stringify(v.zsetValue || [], null, 2)
-      default:
-        return ''
-    }
-  }
-
-  function formatValueForCopy(v: RedisValue | null): string {
-    return formatValueForDisplay(v)
-  }
-
   async function copyValue() {
-    const text = formatValueForCopy(valueData)
+    if (!valueData) return
+    
+    let text = ''
+    switch (valueData.type) {
+      case 'STRING':
+        text = valueData.stringValue ?? ''
+        break
+      case 'LIST':
+        text = (valueData.listValue || []).join('\n')
+        break
+      case 'SET':
+        text = Array.from(valueData.setValue || []).join('\n')
+        break
+      case 'HASH':
+        text = JSON.stringify(valueData.hashValue || {}, null, 2)
+        break
+      case 'ZSET':
+        text = JSON.stringify(valueData.zsetValue || [], null, 2)
+        break
+      default:
+        text = ''
+    }
+    
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
@@ -308,7 +281,27 @@ export default function Content() {
         const res = await fetch(`/api/redis/instances/${selectedId}/${activeDb}/${encodeURIComponent(keyStr)}`, { credentials: 'include' })
         if (!res.ok) return
         const data = await res.json()
-        const display = formatValueForDisplay(data as any)
+        // Format value for display
+        let display = ''
+        switch (data.type) {
+          case 'STRING':
+            display = data.stringValue ?? ''
+            break
+          case 'LIST':
+            display = (data.listValue || []).join('\n')
+            break
+          case 'SET':
+            display = Array.from(data.setValue || []).join('\n')
+            break
+          case 'HASH':
+            display = JSON.stringify(data.hashValue || {}, null, 2)
+            break
+          case 'ZSET':
+            display = JSON.stringify(data.zsetValue || [], null, 2)
+            break
+          default:
+            display = ''
+        }
         if (cancelled || valueSearchRunId.current !== runId) return
         setValueCache(prev => (prev[keyStr] !== undefined ? prev : { ...prev, [keyStr]: display }))
       } catch (_) {
@@ -445,9 +438,9 @@ export default function Content() {
 
   return (
     <div className="flex">
-      <div className="flex w-screen">
+      <div className="flex w-full min-w-0 overflow-hidden">
         {!selected && (
-          <div className="text-gray-500">Select a connection to get started.</div>
+          <div className="text-gray-500 p-4">Select a connection to get started.</div>
         )}
         {selected && (
           <div className="flex-row gap-4 p-4">
@@ -611,111 +604,30 @@ export default function Content() {
 
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
-          <div className="bg-white rounded shadow w-full max-w-lg p-4">
-            <h3 className="text-lg font-semibold mb-3">{editing.id ? 'Edit connection' : 'New connection'}</h3>
-            <div className="grid gap-3">
-              <label className="grid gap-1">
-                <span className="text-sm">Name</span>
-                <input className="border rounded px-2 py-1" value={editing.name} onChange={e=>setEditing({...editing!, name:e.target.value})} />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-sm">Type</span>
-                <select className="border rounded px-2 py-1" value={editing.type} onChange={e=>setEditing({...editing!, type:e.target.value as ConnectionType})}>
-                  <option value="node">Standalone</option>
-                  <option value="sentinel">Sentinel</option>
-                  <option value="cluster">Cluster</option>
-                </select>
-              </label>
-              {editing.type === 'node' && (
-                <>
-                  <label className="grid gap-1">
-                    <span className="text-sm">Host</span>
-                    <input className="border rounded px-2 py-1" placeholder="host" value={editing.url||''} onChange={e=>setEditing({...editing!, url:e.target.value})} />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-sm">Port</span>
-                    <input className="border rounded px-2 py-1" type="number" placeholder="6379" value={editing.port ?? 6379} onChange={e=>setEditing({...editing!, port:e.target.value?Number(e.target.value):undefined})} />
-                  </label>
-                </>
-              )}
-              {editing.type !== 'node' && (
-                <>
-                  <label className="grid gap-1">
-                    <span className="text-sm">Hosts</span>
-                    <input className="border rounded px-2 py-1" placeholder="host1,host2" value={(editing.urls||[]).join(',')} onChange={e=>setEditing({...editing!, urls:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-sm">Port</span>
-                    <input className="border rounded px-2 py-1" type="number" placeholder="26379 (Sentinel) / 6379 (Cluster)" value={editing.port ?? (editing.type==='sentinel'?26379:6379)} onChange={e=>setEditing({...editing!, port:e.target.value?Number(e.target.value):undefined})} />
-                  </label>
-                </>
-              )}
-              {editing.type === 'sentinel' && (
-                <label className="grid gap-1">
-                  <span className="text-sm">Master name</span>
-                  <input className="border rounded px-2 py-1" placeholder="mymaster" value={editing.sentinelMasterId||''} onChange={e=>setEditing({...editing!, sentinelMasterId:e.target.value})} />
-                </label>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-1">
-                  <span className="text-sm">Username</span>
-                  <input className="border rounded px-2 py-1" value={editing.username||''} onChange={e=>setEditing({...editing!, username:e.target.value})} />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-sm">Password</span>
-                  <input className="border rounded px-2 py-1" type="password" value={editing.password||''} onChange={e=>setEditing({...editing!, password:e.target.value})} />
-                </label>
-              </div>
-              {editing.type === 'node' && (
-                <label className="grid gap-1">
-                  <span className="text-sm">Database index</span>
-                  <input className="border rounded px-2 py-1" type="number" value={editing.database ?? ''} onChange={e=>setEditing({...editing!, database:e.target.value?Number(e.target.value):undefined})} />
-                </label>
-              )}
-              <label className="grid gap-1">
-                <span className="text-sm">Timeout (ms)</span>
-                <input className="border rounded px-2 py-1" type="number" value={editing.timeoutMs ?? ''} onChange={e=>setEditing({...editing!, timeoutMs:e.target.value?Number(e.target.value):undefined})} />
-              </label>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="ghost" onClick={cancelEdit}>Cancel</Button>
-              <Button variant="ghost" onClick={saveEdit}>{editing.id ? 'Save' : 'Create'}</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConnectionEditModal
+        open={!!editing}
+        onOpenChange={(open) => {
+          if (!open) cancelEdit()
+        }}
+        connection={editing}
+        onConnectionChange={setEditing}
+        onSave={saveEdit}
+        onCancel={cancelEdit}
+      />
 
-      {viewKey && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded shadow w-full max-w-3xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <div className="min-w-0">
-                <div className="text-xs text-slate-500">Key</div>
-                <div className="font-medium truncate max-w-[60vw]" title={viewKey.key}>{viewKey.key}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className={"rounded hover:bg-slate-100 text-slate-700 shrink-0"} aria-label={copied ? 'Copied' : 'Copy value'} title={copied ? 'Copied' : 'Copy value'} onClick={copyValue} disabled={!valueData || valueLoading}>
-                  {copied ? <Check className="h-4 w-4 shrink-0 text-green-600" /> : <Copy className="h-4 w-4" />}
-                </button>
-                <Button variant="ghost" onClick={closeView}>Close</Button>
-              </div>
-            </div>
-              <div className="pt-4 px-4 text-xs text-slate-500">Value</div>
-            <div className="px-4 py-4 pb-4 pt-0 max-h-[70vh] overflow-auto">
-              {valueLoading && <div className="text-sm text-slate-500">Loading…</div>}
-              {valueError && <div className="text-sm text-red-600">{valueError}</div>}
-              {!valueLoading && !valueError && valueData && (
-                <pre className="whitespace-pre-wrap break-words text-sm bg-slate-50 rounded p-3 border">{formatValueForDisplay(valueData)}</pre>
-              )}
-              {!valueLoading && !valueError && !valueData && (
-                <div className="text-sm text-slate-500">No value</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <KeyValueViewerModal
+        open={!!viewKey}
+        onOpenChange={(open) => {
+          if (!open) closeView()
+        }}
+        keyName={viewKey?.key || ''}
+        value={valueData}
+        loading={valueLoading}
+        error={valueError}
+        copied={copied}
+        onCopy={copyValue}
+        onClose={closeView}
+      />
     </div>
   )
 }

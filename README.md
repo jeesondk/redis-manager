@@ -56,7 +56,9 @@ Redis Manager provides a **modern web interface** for managing Redis connections
 - � **User Profile Modal**: View session info, username, and auth provider details
 - �🔄 **Redis Topology Support**: Standalone, Sentinel, and Cluster modes
 - 📊 **Database Browser**: Navigate databases, scan keys, view values with type detection
-- 🎨 **Modern UI**: Responsive React interface with Tailwind CSS
+- 🔌 **Connection Management**: Create/edit Redis connections with modal dialogs
+- 📋 **Key Value Inspector**: View and copy Redis values with type-aware formatting
+- 🎨 **Modern UI**: Responsive React interface with Tailwind CSS and shadcn/ui components
 - 🚀 **Hot Reload Development**: Integrated frontend/backend development workflow
 - 📦 **Single Artifact**: Self-contained JAR with embedded frontend
 
@@ -944,9 +946,13 @@ redis-manager/
 │   │       │   │   ├── AppLayout.tsx    # Main layout
 │   │       │   │   ├── DesktopTopbar.tsx # Topbar with breadcrumbs, user menu & profile modal
 │   │       │   │   ├── DesktopSidebar.tsx
+│   │       │   │   ├── modals/          # Modal dialogs
+│   │       │   │   │   ├── ConnectionEditModal.tsx  # Create/edit Redis connections
+│   │       │   │   │   ├── KeyValueViewerModal.tsx  # View Redis key values
+│   │       │   │   │   └── index.ts     # Barrel exports
 │   │       │   │   └── ui/              # shadcn components (Avatar, Button, Dialog, etc.)
 │   │       │   ├── pages/
-│   │       │   │   ├── Content.tsx      # Main page
+│   │       │   │   ├── Content.tsx      # Main Redis management page
 │   │       │   │   └── Login.tsx
 │   │       │   ├── routes/
 │   │       │   │   └── LoginRoutes.tsx
@@ -998,6 +1004,37 @@ graph TB
     style Layout fill:#a8dadc
     style Pages fill:#f1faee
 ```
+
+**Modal Components:**
+
+The application uses **shadcn/ui Dialog** components for all modal interactions, ensuring consistent UX and accessibility:
+
+| Modal | Purpose | Key Features |
+|-------|---------|--------------|
+| `ConnectionEditModal` | Create/edit Redis connections | • Dynamic form fields based on connection type (Standalone/Sentinel/Cluster)<br/>• Validates required fields<br/>• Supports authentication credentials<br/>• Configurable timeouts and database selection |
+| `KeyValueViewerModal` | View Redis key values | • Supports all Redis data types (STRING, LIST, SET, HASH, ZSET)<br/>• Copy-to-clipboard functionality<br/>• Formatted JSON display for complex types<br/>• Loading and error states |
+
+**Modal Implementation Pattern:**
+```typescript
+// All modals use shadcn Dialog with controlled state
+<ConnectionEditModal
+  open={!!editing}
+  onOpenChange={(open) => {
+    if (!open) handleClose()
+  }}
+  connection={editing}
+  onConnectionChange={setEditing}
+  onSave={handleSave}
+  onCancel={handleCancel}
+/>
+```
+
+**Benefits:**
+- ✅ **Reusable**: Modal components can be used anywhere in the app
+- ✅ **Accessible**: Built-in keyboard navigation (Esc to close) and ARIA labels
+- ✅ **Consistent**: All modals share the same look and behavior
+- ✅ **Type-safe**: Full TypeScript support with exported types
+- ✅ **Maintainable**: Changes to modal logic only needed in one place
 
 ---
 
