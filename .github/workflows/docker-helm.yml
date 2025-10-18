@@ -25,12 +25,19 @@ jobs:
           cache: 'maven'
 
       - name: Build backend + web (skip tests)
-        uses: nick-fields/retry-action@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          retry_wait_seconds: 30
-          command: ./mvnw -B -DskipTests package
+        run: |
+          # Retry up to 3 times with 30s delay to handle transient Maven Central failures
+          for i in 1 2 3; do
+            ./mvnw -B -DskipTests package && break || {
+              if [ $i -lt 3 ]; then
+                echo "Build attempt $i failed. Retrying in 30 seconds..."
+                sleep 30
+              else
+                echo "Build failed after 3 attempts"
+                exit 1
+              fi
+            }
+          done
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
