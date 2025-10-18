@@ -23,6 +23,8 @@ export default function RedisLanding() {
   const [connections, setConnections] = useState<ConnectionConfig[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [editing, setEditing] = useState<ConnectionConfig | null>(null)
+  const location = useLocation()
+  const navigate = useNavigate()
   // Database list and connection status moved to DesktopSidebar
 
   // Key value modal state
@@ -61,14 +63,19 @@ export default function RedisLanding() {
     return typeof d === 'number' ? d : 0
   }, [connections, selectedId])
 
+  // Active DB is the one selected in the URL if present, otherwise the connection's default DB
+  const activeDb = useMemo(() => {
+    const sp = new URLSearchParams(location.search)
+    const v = sp.get('db')
+    const n = v ? Number(v) : null
+    return Number.isFinite(n as any) && n != null ? (n as number) : defaultDb
+  }, [location.search, defaultDb])
+
   async function loadConnections() {
     const res = await fetch('/api/redis/connections', { credentials: 'include' })
     if (res.ok) setConnections(await res.json())
   }
   useEffect(() => { loadConnections() }, [])
-
-  const location = useLocation()
-  const navigate = useNavigate()
 
   // Sync selection and editing state from URL params
   useEffect(() => {
@@ -126,7 +133,7 @@ export default function RedisLanding() {
     setKeysLoading(true)
     setKeysError(null)
     try {
-      const res = await fetch(`/api/redis/instances/${selectedId}/${defaultDb}/keys?pattern=${encodeURIComponent('*')}&count=100`, { credentials: 'include' })
+      const res = await fetch(`/api/redis/instances/${selectedId}/${activeDb}/keys?pattern=${encodeURIComponent('*')}&count=100`, { credentials: 'include' })
       if (!res.ok) throw new Error(`Failed to load keys (HTTP ${res.status})`)
       const data = await res.json()
       setKeys(Array.isArray(data) ? data : [])
@@ -141,7 +148,7 @@ export default function RedisLanding() {
   useEffect(() => {
     fetchKeys()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, defaultDb])
+  }, [selectedId, activeDb])
 
   // Auto-refresh effect
   useEffect(() => {
@@ -154,7 +161,7 @@ export default function RedisLanding() {
       }
     }, ms)
     return () => clearInterval(id)
-  }, [autoRefresh, refreshIntervalSec, selectedId, defaultDb, keysLoading])
+  }, [autoRefresh, refreshIntervalSec, selectedId, activeDb, keysLoading])
 
   // Fetch the key value when modal is requested
   useEffect(() => {
@@ -226,7 +233,7 @@ export default function RedisLanding() {
 
   function viewKeyFromTable(k: string) {
     const sp = new URLSearchParams(location.search)
-    sp.set('db', String(defaultDb))
+    sp.set('db', String(activeDb))
     sp.set('key', k)
     navigate({ search: `?${sp.toString()}` })
   }
@@ -336,7 +343,7 @@ export default function RedisLanding() {
               <div className="text-xs text-slate-500">Default database keys are shown below. Databases are shown in the sidebar for reference.</div>
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm text-slate-700">Keys in DB {defaultDb}</div>
+                  <div className="text-sm text-slate-700">Keys in DB {activeDb}</div>
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 text-sm text-slate-700">
                       <input
@@ -497,7 +504,7 @@ export default function RedisLanding() {
                 <div className="font-medium truncate max-w-[60vw]" title={viewKey.key}>{viewKey.key}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button className={"rounded hover:bg-slate-100 text-slate-700 shrink-0"} size="icon" aria-label={copied ? 'Copied' : 'Copy value'} title={copied ? 'Copied' : 'Copy value'} onClick={copyValue} disabled={!valueData || valueLoading}>
+                <button className={"rounded hover:bg-slate-100 text-slate-700 shrink-0"} aria-label={copied ? 'Copied' : 'Copy value'} title={copied ? 'Copied' : 'Copy value'} onClick={copyValue} disabled={!valueData || valueLoading}>
                   {copied ? <Check className="h-4 w-4 shrink-0 text-green-600" /> : <Copy className="h-4 w-4" />}
                 </button>
                 <Button variant="ghost" onClick={closeView}>Close</Button>

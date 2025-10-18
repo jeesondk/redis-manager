@@ -70,6 +70,16 @@ export function DesktopSidebar() {
             setDbs(null)
             setStatus({ success: true, message: 'Disconnected' })
             setExpandedId(null)
+            // Also reset RedisLanding to the default page if this was the selected connection
+            if (selectedId === id) {
+              const sp = new URLSearchParams(location.search)
+              sp.delete('conn')
+              sp.delete('db')
+              sp.delete('key')
+              sp.delete('add')
+              sp.delete('edit')
+              navigate({ search: `?${sp.toString()}` })
+            }
           } else {
             // connect
             fetchDatabasesFor(id)
@@ -180,7 +190,22 @@ export function DesktopSidebar() {
 
   function toggleExpand(id: number) {
     if (expandedId === id) {
-      // collapse
+      // collapse — also disconnect if this connection is currently connected
+      if (connectedId === id) {
+        setConnectedId(null)
+        setDbs(null)
+        setStatus({ success: true, message: 'Disconnected' })
+        // Also reset RedisLanding to the default page if this was the selected connection
+        if (selectedId === id) {
+          const sp = new URLSearchParams(location.search)
+          sp.delete('conn')
+          sp.delete('db')
+          sp.delete('key')
+          sp.delete('add')
+          sp.delete('edit')
+          navigate({ search: `?${sp.toString()}` })
+        }
+      }
       setExpandedId(null)
       return
     }
@@ -208,6 +233,16 @@ export function DesktopSidebar() {
     setDbs(null)
     setStatus({ success: true, message: 'Disconnected' })
     setExpandedId(null)
+    // Reset RedisLanding to the default page if the currently selected connection was disconnected
+    if (selectedId === connectedId) {
+      const sp = new URLSearchParams(location.search)
+      sp.delete('conn')
+      sp.delete('db')
+      sp.delete('key')
+      sp.delete('add')
+      sp.delete('edit')
+      navigate({ search: `?${sp.toString()}` })
+    }
   }
 
   return (
@@ -301,25 +336,39 @@ export function DesktopSidebar() {
                       )}
                       {!loadingDbs[c.id] && dbs && (
                         <ul className="mt-2 pl-2 border-l">
-                          {dbs.map(db => (
-                            <li key={db.index} className="py-1 text-sm flex items-center justify-between">
-                              <div>
-                                <span className="font-medium">DB {db.index}</span>
-                                <span className="text-gray-500"> — {db.keys ?? 0} keys</span>
-                              </div>
-                              <div className="text-xs text-slate-500">&nbsp;</div>
-                            </li>
-                          ))}
+                          {dbs.map(db => {
+                            const sp = new URLSearchParams(location.search)
+                            const selDbStr = sp.get('db')
+                            const selDb = selDbStr ? Number(selDbStr) : null
+                            const isActive = selectedId === c.id && selDb === db.index
+                            return (
+                              <li
+                                key={db.index}
+                                className={`py-1 px-2 rounded text-sm flex items-center justify-between cursor-pointer hover:bg-slate-100 ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : ''}`}
+                                onClick={() => {
+                                  const sp2 = new URLSearchParams(location.search)
+                                  sp2.set('conn', String(c.id))
+                                  sp2.set('db', String(db.index))
+                                  // Do not touch 'key' here; keys view modal controls it
+                                  sp2.delete('add')
+                                  sp2.delete('edit')
+                                  navigate({ search: `?${sp2.toString()}` })
+                                }}
+                                role="button"
+                                aria-selected={isActive}
+                                title={`Switch to DB ${db.index}`}
+                             >
+                                <div>
+                                  <span className="font-medium">DB {db.index}</span>
+                                  <span className="text-gray-500"> — {db.keys ?? 0} keys</span>
+                                </div>
+                                <div className="text-xs text-slate-500">&nbsp;</div>
+                              </li>
+                            )
+                          })}
                         </ul>
                       )}
 
-                      <div className="mt-2 flex gap-2">
-                        {connectedId === c.id ? (
-                          <Button size="sm" variant="ghost" onClick={() => { disconnectCurrent() }}>Disconnect</Button>
-                        ) : (
-                          <Button size="sm" variant="ghost" onClick={() => { fetchDatabasesFor(c.id); setExpandedId(c.id) }}>Connect</Button>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>
