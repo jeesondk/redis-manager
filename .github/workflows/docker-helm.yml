@@ -25,7 +25,12 @@ jobs:
           cache: 'maven'
 
       - name: Build backend + web (skip tests)
-        run: ./mvnw -B -DskipTests package
+        uses: nick-fields/retry-action@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ./mvnw -B -DskipTests package
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

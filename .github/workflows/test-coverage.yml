@@ -24,8 +24,12 @@ jobs:
           cache: 'maven'
 
       - name: Run unit tests with coverage
-        run: |
-          ./mvnw -B -DskipITs=true test jacoco:report
+        uses: nick-fields/retry-action@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ./mvnw -B -DskipITs=true test jacoco:report
 
       - name: Publish coverage summary
         uses: irongut/CodeCoverageSummary@v1.3.0
