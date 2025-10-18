@@ -1,0 +1,49 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "redis-manager.fullname" . }}
+  labels:
+    {{- include "redis-manager.labels" . | nindent 4 }}
+  {{- /* Compute whether we need an annotations block (ipRestrictions or user-defined) */ -}}
+  {{- $hasAllow := and .Values.ipRestrictions.enabled (gt (len .Values.ipRestrictions.allowList) 0) -}}
+  {{- $hasUserAnn := and .Values.ingress.annotations (not (empty .Values.ingress.annotations)) -}}
+  {{- if or $hasAllow $hasUserAnn }}
+  annotations:
+    {{- if $hasAllow }}
+    {{- $class := default "" .Values.ingress.className -}}
+    {{- $allow := join "," .Values.ipRestrictions.allowList -}}
+    {{- if or (eq $class "") (contains $class "nginx") }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ $allow | quote }}
+    {{- else if or (contains $class "alb") (contains $class "aws") }}
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ $allow | quote }}
+    {{- end }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "redis-manager.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+          {{- end }}
+    {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+{{- end }}

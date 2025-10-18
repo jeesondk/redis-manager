@@ -1,0 +1,19 @@
+apiVersion: v2
+name: redis-manager
+description: A Helm chart for deploying the Redis Manager (Quarkus) application
+
+# Helm chart type
+# application: deploys to Kubernetes
+# library: defines chart primitives for other charts to use
+# This is an application chart
+
+type: application
+
+# Chart version (helm chart semantic version)
+version: 0.1.0
+
+# This is the version number of the application being deployed. This should be
+# set to the version of the application. It can be overridden with --set image.tag
+appVersion: "1.0.0"
+
+dependencies: []

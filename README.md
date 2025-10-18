@@ -53,7 +53,8 @@ Redis Manager provides a **modern web interface** for managing Redis connections
 
 ✨ **Core Capabilities**
 - 🔐 **Multi-provider Authentication**: Basic, OIDC, and Azure Entra ID support
-- 🔄 **Redis Topology Support**: Standalone, Sentinel, and Cluster modes
+- � **User Profile Modal**: View session info, username, and auth provider details
+- �🔄 **Redis Topology Support**: Standalone, Sentinel, and Cluster modes
 - 📊 **Database Browser**: Navigate databases, scan keys, view values with type detection
 - 🎨 **Modern UI**: Responsive React interface with Tailwind CSS
 - 🚀 **Hot Reload Development**: Integrated frontend/backend development workflow
@@ -247,6 +248,74 @@ sequenceDiagram
 - TTL: 30 minutes (configurable)
 - HttpOnly flag for XSS protection
 - SameSite policy enabled
+
+### User Profile & Session Management
+
+The application includes a **user profile modal** that displays current session information and user details.
+
+**Accessing the Profile:**
+1. Click on the user avatar in the top-right corner of the navigation bar
+2. Select "Profile" from the dropdown menu
+3. View detailed session information in the modal dialog
+
+**Profile Information Displayed:**
+
+| Section | Information | Source |
+|---------|-------------|--------|
+| **User Identity** | Username and avatar | Session cookie + `/api/auth/me` |
+| **Authentication** | Active auth provider (BASIC/OIDC/ENTRAID) | `/api/auth/provider` |
+| **Session Status** | Active status and 30-minute timeout | Cookie TTL |
+
+**Profile Modal Features:**
+- 👤 Large user avatar with initials fallback
+- 📊 Real-time session information
+- 🔐 Authentication provider visibility
+- ⏱️ Session timeout indicator
+- 📱 Responsive design for all screen sizes
+- ⌨️ Full keyboard navigation support
+
+**Technical Implementation:**
+```typescript
+// Lazy-loaded data fetching
+useEffect(() => {
+  if (modalOpen) {
+    Promise.all([
+      fetch('/api/auth/me'),      // Get user info
+      fetch('/api/auth/provider') // Get auth provider
+    ]).then(([user, provider]) => {
+      // Update modal state
+    });
+  }
+}, [modalOpen]);
+```
+
+The profile modal only fetches data when opened, minimizing unnecessary API calls and improving performance.
+
+**User Profile Flow:**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Topbar as DesktopTopbar
+    participant Modal as Profile Modal
+    participant API as Auth API
+    
+    User->>Topbar: Click avatar
+    Topbar->>User: Show dropdown menu
+    User->>Topbar: Click "Profile"
+    Topbar->>Modal: Open modal (setShowProfileModal=true)
+    
+    Modal->>API: GET /api/auth/me
+    Modal->>API: GET /api/auth/provider
+    
+    API-->>Modal: {username: "admin"}
+    API-->>Modal: {provider: "BASIC"}
+    
+    Modal->>User: Display:<br/>• Username<br/>• Auth Provider<br/>• Session Status
+    
+    User->>Modal: Click "Close"
+    Modal->>Topbar: Close modal
+```
 
 ### Redis Topology Support
 
@@ -873,9 +942,9 @@ redis-manager/
 │   │       ├── src/
 │   │       │   ├── components/
 │   │       │   │   ├── AppLayout.tsx    # Main layout
-│   │       │   │   ├── DesktopTopbar.tsx
+│   │       │   │   ├── DesktopTopbar.tsx # Topbar with breadcrumbs, user menu & profile modal
 │   │       │   │   ├── DesktopSidebar.tsx
-│   │       │   │   └── ui/              # shadcn components
+│   │       │   │   └── ui/              # shadcn components (Avatar, Button, Dialog, etc.)
 │   │       │   ├── pages/
 │   │       │   │   ├── Content.tsx      # Main page
 │   │       │   │   └── Login.tsx

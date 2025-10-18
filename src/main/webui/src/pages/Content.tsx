@@ -445,7 +445,7 @@ export default function Content() {
 
   return (
     <div className="flex">
-      <div className="flex">
+      <div className="flex w-screen">
         {!selected && (
           <div className="text-gray-500">Select a connection to get started.</div>
         )}

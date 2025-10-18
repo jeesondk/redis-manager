@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "redis-manager.fullname" . }}-config
+  labels:
+    {{- include "redis-manager.labels" . | nindent 4 }}
+data:
+  application.properties: |
+    # Rendered by Helm
+    # Custom application properties from values.appProperties
+    {{- range $k, $v := .Values.appProperties }}
+    {{ $k }}={{ $v }}
+    {{- end }}
+    {{- if eq .Values.auth.type "oidc" }}
+    # OIDC configuration (from values.auth.oidc)
+    quarkus.oidc.enabled=true
+    {{- if .Values.auth.oidc.applicationType }}
+    quarkus.oidc.application-type={{ .Values.auth.oidc.applicationType }}
+    {{- end }}
+    {{- if .Values.auth.oidc.authServerUrl }}
+    quarkus.oidc.auth-server-url={{ .Values.auth.oidc.authServerUrl }}
+    {{- end }}
+    {{- if .Values.auth.oidc.clientId }}
+    quarkus.oidc.client-id={{ .Values.auth.oidc.clientId }}
+    {{- end }}
+    {{- range $k, $v := .Values.auth.oidc.additional }}
+    quarkus.oidc.{{ $k }}={{ $v }}
+    {{- end }}
+    {{- else }}
+    # Explicitly disable OIDC when not selected
+    quarkus.oidc.enabled=false
+    {{- end }}

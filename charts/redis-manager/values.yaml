@@ -1,0 +1,146 @@
+# Default values for redis-manager Helm chart.
+
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/redis-manager
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+  # - name: my-registry-secret
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+automountServiceAccountToken: true
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+
+management:
+  enabled: true
+  port: 9000
+  # Probe paths for Quarkus management interface (SmallRye Health)
+  healthPath: /management/health
+  livenessPath: /management/health/live
+  readinessPath: /management/health/ready
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: redis-manager.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: redis-manager-tls
+  #    hosts:
+  #      - redis-manager.local
+
+# IP restrictions for ingress access control
+# When enabled, the chart will configure controller-specific annotations to allow only the listed CIDRs.
+# Supported controllers:
+# - NGINX (default when className is empty or contains "nginx"): uses nginx.ingress.kubernetes.io/whitelist-source-range
+# - AWS ALB (when className contains "alb" or "aws"): uses alb.ingress.kubernetes.io/inbound-cidrs
+# For other controllers, use ingress.annotations directly.
+ipRestrictions:
+  enabled: false
+  # List of CIDR blocks or IPs to allow (e.g., ["192.168.1.0/24", "1.2.3.4/32"]).
+  allowList: []
+
+resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 512Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 256Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Probes configuration
+probes:
+  startup:
+    enabled: false
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 30
+    successThreshold: 1
+  liveness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+    successThreshold: 1
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+    successThreshold: 1
+
+# Environment configuration
+# Additional env vars to inject directly
+extraEnv: []
+  # - name: LOG_LEVEL
+  #   value: info
+
+# Additional envFrom sources (ConfigMaps/Secrets)
+extraEnvFrom: []
+  # - configMapRef:
+  #     name: other-config
+
+# Application properties override
+# These key/values are rendered to a ConfigMap as an application.properties file
+# and loaded via QUARKUS_CONFIG_LOCATIONS.
+appProperties: {}
+  # quarkus.otel.exporter.otlp.endpoint: http://otel-collector:4317
+  # quarkus.log.level: INFO
+
+# Authentication configuration
+auth:
+  type: none # one of: none, oidc
+  oidc:
+    authServerUrl: ""
+    clientId: ""
+    clientSecret: ""
+    applicationType: web
+    # Additional quarkus.oidc.* properties
+    additional: {}
+      # token.audience: your-aud
+      # credentials.jwt.secret: abc
+
+# Ingress extra annotations example for auth proxies, etc.
+ingressAnnotations: {}
