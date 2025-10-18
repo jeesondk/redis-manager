@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+// @ts-expect-error - entry-server.js is generated during build
 import { render } from './dist/client/entry-server.js'
 
-// @ts-ignore
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const template = readFileSync(resolve(__dirname, 'dist/client/index.html'), 'utf-8')
 
