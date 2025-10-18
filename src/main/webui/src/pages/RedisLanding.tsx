@@ -109,31 +109,52 @@ export default function RedisLanding() {
     }
   }, [location.search, selectedId])
 
-  // Load keys for the default DB when connection changes
-  useEffect(() => {
+  // Keys refresh controls
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(30)
+
+  // Dedicated function to fetch keys (can be triggered manually or on interval)
+  const fetchKeys = async () => {
     if (selectedId == null) {
       setKeys([])
       setKeysError(null)
       setKeysLoading(false)
       return
     }
-    let cancelled = false
+    // Prevent starting a new load if one is already in progress
+    if (keysLoading) return
     setKeysLoading(true)
     setKeysError(null)
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/redis/instances/${selectedId}/${defaultDb}/keys?pattern=${encodeURIComponent('*')}&count=100`, { credentials: 'include' })
-        if (!res.ok) throw new Error(`Failed to load keys (HTTP ${res.status})`)
-        const data = await res.json()
-        if (!cancelled) setKeys(Array.isArray(data) ? data : [])
-      } catch (e: any) {
-        if (!cancelled) setKeysError(e?.message || 'Failed to load keys')
-      } finally {
-        if (!cancelled) setKeysLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
+    try {
+      const res = await fetch(`/api/redis/instances/${selectedId}/${defaultDb}/keys?pattern=${encodeURIComponent('*')}&count=100`, { credentials: 'include' })
+      if (!res.ok) throw new Error(`Failed to load keys (HTTP ${res.status})`)
+      const data = await res.json()
+      setKeys(Array.isArray(data) ? data : [])
+    } catch (e: any) {
+      setKeysError(e?.message || 'Failed to load keys')
+    } finally {
+      setKeysLoading(false)
+    }
+  }
+
+  // Load keys when connection or DB changes
+  useEffect(() => {
+    fetchKeys()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, defaultDb])
+
+  // Auto-refresh effect
+  useEffect(() => {
+    if (!autoRefresh) return
+    const ms = Math.max(1, Number.isFinite(refreshIntervalSec) ? refreshIntervalSec : 30) * 1000
+    const id = setInterval(() => {
+      // Avoid overlapping loads
+      if (!keysLoading) {
+        fetchKeys()
+      }
+    }, ms)
+    return () => clearInterval(id)
+  }, [autoRefresh, refreshIntervalSec, selectedId, defaultDb, keysLoading])
 
   // Fetch the key value when modal is requested
   useEffect(() => {
@@ -314,7 +335,45 @@ export default function RedisLanding() {
             <div className="space-y-3">
               <div className="text-xs text-slate-500">Default database keys are shown below. Databases are shown in the sidebar for reference.</div>
               <div>
-                <div className="text-sm text-slate-700 mb-2">Keys in DB {defaultDb}</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm text-slate-700">Keys in DB {defaultDb}</div>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={autoRefresh}
+                        onChange={(e) => setAutoRefresh(e.target.checked)}
+                        aria-label="Toggle auto-refresh"
+                        title="Toggle auto-refresh"
+                      />
+                      Auto refresh
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <span>Interval</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={refreshIntervalSec}
+                        onChange={(e) => {
+                          const v = Number(e.target.value)
+                          if (Number.isNaN(v)) {
+                            setRefreshIntervalSec(30)
+                          } else {
+                            setRefreshIntervalSec(Math.max(1, Math.floor(v)))
+                          }
+                        }}
+                        className="w-20 border rounded px-2 py-1"
+                        aria-label="Refresh interval in seconds"
+                        title="Refresh interval in seconds"
+                      />
+                      <span>s</span>
+                    </label>
+                    <Button size="sm" variant="ghost" onClick={() => fetchKeys()} disabled={keysLoading} aria-label="Refresh now" title="Refresh now">
+                      {keysLoading ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                  </div>
+                </div>
                 {keysLoading && <div className="text-sm text-slate-500">Loading keys…</div>}
                 {keysError && <div className="text-sm text-red-600">{keysError}</div>}
                 {!keysLoading && !keysError && Array.isArray(keys) && keys.length === 0 && (
