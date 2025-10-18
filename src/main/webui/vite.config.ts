@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
     plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
@@ -12,6 +12,7 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist/client',
-        emptyOutDir: true
+        // Only empty the directory for the client build, not for SSR
+        emptyOutDir: !isSsrBuild
     }
-})
+}))

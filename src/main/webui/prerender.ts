@@ -1,11 +1,11 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { render } from './src/entry-server'
+import { render } from './dist/client/entry-server.js'
 
 // @ts-ignore
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const template = readFileSync(resolve(__dirname, 'index.html'), 'utf-8')
+const template = readFileSync(resolve(__dirname, 'dist/client/index.html'), 'utf-8')
 
 // Add any routes you want pre-rendered:
 const routes = ['/', '/about']
